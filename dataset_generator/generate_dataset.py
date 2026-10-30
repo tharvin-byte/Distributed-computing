@@ -1,5 +1,9 @@
+import argparse
 import json
 import random
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
 
 
 def rowcount():
@@ -12,7 +16,7 @@ def rowcount():
         # There should be at least one row.
         if rows < 1:
             # Condition violated: user should try again
-            rows = rowcount()
+            return rowcount()
     except:
         # Invalid input: user should try again
         rows = rowcount()
@@ -26,7 +30,7 @@ def generate_dataset():
     rows = rowcount()
     try:
         # Get the item list from the item list file
-        with open("items/item_list.json", "r") as itemjson:
+        with (BASE_DIR / "items" / "item_list.json").open(encoding="utf-8") as itemjson:
             items = json.load(itemjson)
         # Get the total number of items in the item list.
         itemcount = len(items)
@@ -42,10 +46,16 @@ def generate_dataset():
                 data_item.append(item_added)
             data.append(data_item)
         # Save the dataset into the JSON file.
-        jsonwrite = open("dataset/dataset.json", "w")
-        json.dump(data, jsonwrite, indent=4)
-        jsonwrite.close()
+        output = BASE_DIR / "dataset" / "dataset.json"
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(data, indent=4), encoding="utf-8")
     except:
         print("Item list was not found")
 
-generate_dataset()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("rows", nargs="?", type=int, help="Number of transactions")
+    args = parser.parse_args()
+    if args.rows is not None:
+        rowcount = lambda: args.rows
+    generate_dataset()

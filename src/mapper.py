@@ -1,70 +1,50 @@
-import sys
+#!/usr/bin/env python3
+import argparse
+import csv
 import itertools
-import ast
 import json
+import sys
+from pathlib import Path
 
 
-def getDiscardedItems():
-    """ Get the list of discarded items """
-
+def load_discarded(path):
     try:
-        f = open("discarded_items.txt", "r")
-        s = f.read()
-        f.close()
-        discarded = ast.literal_eval(s)
-    except:
-        discarded = []
-    return discarded
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+        return {tuple(item) for item in raw if isinstance(item, list)}
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        return set()
 
 
-def IsSubset(l, s):
-    """ Check if list s is a subset of nested list l """
-
-    result = False
-    for i in s:
-        if set(i).issubset(set(l)):
-            result = True
-    return result
+def parse_transaction(line, input_format):
+    values = json.loads(line) if input_format == "json" else next(csv.reader([line]))
+    if not isinstance(values, list):
+        raise ValueError("JSON transaction must be an array")
+    return sorted({str(value).strip() for value in values if str(value).strip()})
 
 
-def getItemsetLength():
-    """ Get the length of each itemset combination """
+def main():
+    parser = argparse.ArgumentParser(description="Generate Apriori candidates for Hadoop Streaming")
+    parser.add_argument("--itemset-length", type=int, required=True)
+    parser.add_argument("--discarded-file", default="discarded_items.json")
+    parser.add_argument("--input-format", choices=("csv", "json"), default="csv")
+    args = parser.parse_args()
+    if args.itemset_length < 1:
+        parser.error("--itemset-length must be at least 1")
+    discarded = load_discarded(args.discarded_file)
+    for raw_line in sys.stdin:
+        line = raw_line.strip()
+        if not line:
+            continue
+        try:
+            transaction = parse_transaction(line, args.input_format)
+        except (csv.Error, ValueError, json.JSONDecodeError) as error:
+            print("Skipping malformed transaction: %s" % error, file=sys.stderr)
+            continue
+        for itemset in itertools.combinations(transaction, args.itemset_length):
+            if any(set(infrequent).issubset(itemset) for infrequent in discarded):
+                continue
+            print("%s\t1" % json.dumps(itemset, separators=(",", ":")))
 
-    try:
-        with open("apriori_settings.json", "r") as j:
-            configs = json.load(j)
-        setlength = configs["itemset-length"]
-    except:
-        # Use pairs if no permitted value
-        setlength = 2
-    return setlength
 
-
-def mapper(n):
-    """ Emits k itemsets of the form <item, count> from a dataset """
-
-    # Step 1: Get list of discarded items
-    discarded = getDiscardedItems()
-    # Step 2: Generate a stream of transactions from the CSV dataset
-    for line in sys.stdin:
-        line = line.strip()
-        words = line.split(",")
-        datasubset = []
-        for word in words:
-            # Step 3: Remove duplicates and empty words
-            if word not in datasubset and len(word) > 0:
-                datasubset.append(word)
-        # Step 4: Sort the dataset to avoid duplicated keys
-        datasubset.sort()
-        # Step 5: Combine the items within a single transaction
-        if len(datasubset) > 0:
-            finaldatasubset = list(itertools.combinations(datasubset, n))
-        # Dataset is created as an input to reducer and passed sequentially
-        if len(finaldatasubset) > 0:
-            # Print all key-value pair combinations not discarded
-            for i in finaldatasubset:
-                if len(i) > 0 and not IsSubset(i, discarded):
-                    print("%s\t%s" % (str(i), 1))
-
-# Running the mapper code
-mapper(getItemsetLength())
+if __name__ == "__main__":
+    main()

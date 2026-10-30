@@ -1,5 +1,5 @@
 {
-  "itemset-length": 1,
-  "minimum-support": 250,
-  "minimum-confidence-level": 80
+    "itemset-length": 1,
+    "minimum-support": 250,
+    "minimum-confidence-level": 80
 }

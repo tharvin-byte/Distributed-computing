@@ -1,5 +1,10 @@
-# Python_Hadoop_MapReduce_MarketBasketAnalysis
-Market Basket Analysis using Hadoop MapReduce in Python
+# Python Hadoop MapReduce Market Basket Analysis
+
+Market basket analysis using Hadoop MapReduce and Python Hadoop Streaming.
+
+The Hadoop cluster is the primary execution target. The mapper and reducer are
+stateless workers, and `src/hadoop_apriori.py` is the driver that submits the
+sequential Apriori passes required by the algorithm.
 
 This repository contains the [code](https://github.com/BurraAbhishek/Python_Hadoop_MapReduce_MarketBasketAnalysis/tree/main/src) which finds the most frequently occurring item(set)s from a given list of transactions. In addition to that, this repository also contains a [dataset generator](https://github.com/BurraAbhishek/Python_Hadoop_MapReduce_MarketBasketAnalysis/tree/main/dataset_generator) which generates JSON and CSV datasets for [affinity analysis](https://en.wikipedia.org/wiki/Affinity_analysis).
 
@@ -23,11 +28,91 @@ Hadoop Streaming is included by default in Hadoop distributions. It allows devel
 The Apriori algorithm is a multi-pass algorithm. This poses some challenges to conventional Java-based MapReduce programs and bigger challenges to using the streaming MapReduce programs. In a conventional Java MapReduce program, multi-pass algorithms can be configured in the driver program. In streaming MapReduce programs, there is no concept of driver programs. Therefore, we have to run all the passes manually and sequentially. In addition to that, writing configurations and reading from them doesn’t work using the Hadoop Streaming utility. Therefore, additional scripts that write configuration changes are required in addition to the MapReduce code. On Linux, this can be automated because Linux can natively run shell scripts (.sh files). 
 
 
-## Setup:
-Please refer to this [page](https://github.com/BurraAbhishek/Python_Hadoop_MapReduce_MarketBasketAnalysis/wiki/Hadoop-Development-Onboarding-(Linux,-Single-Cluster)) in the wiki of this repository.
+## Interactive Web Application
 
-## Running the code:
-Please refer to this [page](https://github.com/BurraAbhishek/Python_Hadoop_MapReduce_MarketBasketAnalysis/wiki/Experiments:-Running-the-MapReduce-code-(Linux)) in the wiki of this repository.
+An interactive web dashboard (FastAPI + React 18 / Tailwind CSS) is available to run and visualize market basket analysis without typing terminal commands:
+
+1. **Install dependencies**:
+   ```bash
+   pip install -r backend/requirements.txt
+   cd frontend && npm install && cd ..
+   ```
+
+2. **Launch the Web App**:
+   ```bash
+   python run_web.py
+   ```
+   Open your browser at **http://localhost:5173** (API Swagger docs at **http://127.0.0.1:8000/docs**).
+
+3. **Web Features**:
+   - **Dataset Studio**: Add/manage store catalog items, generate synthetic transaction datasets with a slider, or upload custom CSV/JSON files.
+   - **Mining Dashboard**: Interactive sliders for Minimum Support & Minimum Confidence, real-time MapReduce sequential pass progress stepper.
+   - **Rules & Analytics**: Interactive tables for frequent itemsets and association rules with Support, Confidence, and Lift indicators, filterable and exportable to CSV/JSON.
+
+## Hadoop workflow
+
+1. Create a one-transaction-per-line CSV file and upload it to HDFS:
+
+   ```bash
+   hdfs dfs -mkdir -p /data/market-basket
+   hdfs dfs -put dataset_generator/dataset/csv_dataset.csv /data/market-basket/
+   ```
+
+2. Locate the Hadoop Streaming JAR and run the driver from `src` (or provide
+   an absolute path to the script):
+
+   ```bash
+   export HADOOP_STREAMING_JAR="$HADOOP_HOME/share/hadoop/tools/lib/hadoop-streaming-3.x.x.jar"
+   python3 src/hadoop_apriori.py /data/market-basket/csv_dataset.csv \
+     --minimum-support 250 \
+     --output /results/market-basket
+   ```
+
+   The driver creates one HDFS output directory per pass and prints the final
+   frequent itemsets as JSON. Use `--input-format json` for one JSON array per
+   input line. `--max-itemset-length` and `--reducers` control cluster cost.
+
+3. Inspect a pass directly when debugging:
+
+   ```bash
+   hdfs dfs -cat /results/market-basket/pass-1/part-*
+   ```
+
+For a local smoke test without Hadoop, the workers can be composed through a
+Unix pipe:
+
+```bash
+printf 'bread,milk,eggs\nbread,eggs\n' |
+  python3 src/mapper.py --itemset-length 2 --discarded-file src/discarded_items.json |
+  sort |
+  python3 src/reducer.py --minimum-support 2
+```
+
+## Setup
+
+The original Linux single-cluster onboarding notes remain available in the
+[project wiki](https://github.com/BurraAbhishek/Python_Hadoop_MapReduce_MarketBasketAnalysis/wiki/Hadoop-Development-Onboarding-(Linux,-Single-Cluster)).
+
+## Dataset generator
+
+The generator is independent of Hadoop and produces sample input for HDFS:
+
+```bash
+python3 dataset_generator/generate_items.py bread
+python3 dataset_generator/generate_dataset.py 10000
+python3 dataset_generator/generate_csvdataset.py
+```
+
+The generated files are ignored by Git. The checked-in `*_sample` files are
+small examples for documentation and tests.
+
+## Verification
+
+Run the standard-library test suite:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
 
 ## License
 

@@ -1,5 +1,9 @@
 import json
-import ast
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent
+SETTINGS_FILE = BASE_DIR / "apriori_settings.json"
+DISCARDED_FILE = BASE_DIR / "discarded_items.json"
 
 
 def nextPass():
@@ -11,14 +15,12 @@ def nextPass():
 
     try:
         # Load the JSON settings file
-        with open("apriori_settings.json", "r") as j:
+        with SETTINGS_FILE.open(encoding="utf-8") as j:
             configs = json.load(j)
         # Increment the pass attribute by 1
         configs["itemset-length"] += 1
         # Save the updated settings
-        f = open("apriori_settings.json", "w")
-        json.dump(configs, f, indent=4)
-        f.close()
+        SETTINGS_FILE.write_text(json.dumps(configs, indent=4), encoding="utf-8")
     except:
         # Print error message
         print("Couldn't go to next pass")
@@ -28,26 +30,15 @@ def updateDiscarded():
     """ Update the list of discarded items from most recent pass """
 
     try:
-        dfile = open("discarded_items.txt", "r")
-        s1 = dfile.read()
-        oldDiscarded = ast.literal_eval(s1)
-        sfile = open("part-00000", "r")
-        successAppend = 0
-        while successAppend == 0:
-            try:
-                s2 = sfile.readline()
-                # Remove unnecessary characters from list string.
-                s2 = s2[0:-2]
-                # Convert list into array
-                addDiscarded = ast.literal_eval(s2)
-                # Add the item to the full list of discarded items
-                oldDiscarded.append(addDiscarded)
-            except:
-                successAppend = 1
-                break
-        wfile = open("discarded_items.txt", "w")
-        wfile.write(str(oldDiscarded))
-        wfile.close()
+        old_discarded = json.loads(DISCARDED_FILE.read_text(encoding="utf-8")) if DISCARDED_FILE.exists() else []
+        for output_file in BASE_DIR.glob("part-*"):
+            for line in output_file.read_text(encoding="utf-8").splitlines():
+                fields = line.split("\t")
+                if len(fields) == 3 and fields[0] == "discarded":
+                    itemset = json.loads(fields[1])
+                    if itemset not in old_discarded:
+                        old_discarded.append(itemset)
+        DISCARDED_FILE.write_text(json.dumps(old_discarded, indent=2), encoding="utf-8")
     except:
         # Print error message
         print("Couldn't update list of discarded items. Try manually.")

@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.test-discarded-items.json
+dataset_generator/items/item_list.json
+dataset_generator/dataset/dataset.json
+dataset_generator/dataset/csv_dataset.csv
+.venv/
+frontend/node_modules/
+frontend/dist/
+backend/uploads/*
+!backend/uploads/.gitkeep
+

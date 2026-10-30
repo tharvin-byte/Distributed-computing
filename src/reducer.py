@@ -1,42 +1,45 @@
-import ast
+#!/usr/bin/env python3
+import argparse
 import sys
 import json
 
 
-def getMinConfidence():
-    """ Get the minimum number of transaction occurrence for each itemset """
+def main():
+    parser = argparse.ArgumentParser(description="Count Apriori candidates in Hadoop Streaming")
+    parser.add_argument("--minimum-support", type=int, required=True)
+    args = parser.parse_args()
+    if args.minimum_support < 1:
+        parser.error("--minimum-support must be at least 1")
 
-    try:
-        with open("apriori_settings.json", "r") as j:
-            configs = json.load(j)
-        minconfidence = configs["minimum-support"]
-    except:
-        # A user-defined value
-        minconfidence = 5
-    return minconfidence
+    current_key = None
+    current_count = 0
+
+    def emit(key, count):
+        if key is None:
+            return
+        try:
+            itemset = json.loads(key)
+            if not isinstance(itemset, list):
+                raise ValueError
+        except (json.JSONDecodeError, ValueError):
+            print("Skipping malformed mapper key: %s" % key, file=sys.stderr)
+            return
+        category = "frequent" if count >= args.minimum_support else "discarded"
+        print("%s\t%s\t%s" % (category, json.dumps(itemset, separators=(",", ":")), count))
+
+    for raw_line in sys.stdin:
+        try:
+            key, value = raw_line.rstrip("\n").split("\t", 1)
+            count = int(value)
+        except (ValueError, TypeError):
+            print("Skipping malformed mapper output: %s" % raw_line.rstrip(), file=sys.stderr)
+            continue
+        if key != current_key:
+            emit(current_key, current_count)
+            current_key, current_count = key, 0
+        current_count += count
+    emit(current_key, current_count)
 
 
-minconfidence = getMinConfidence()
-addeditems = []
-items = []
-
-for line in sys.stdin:
-    # Split the input
-    combination, count = line.split("\t")
-    count = int(count.replace("\n", ""))
-    # Processing first occurrence of itemset
-    if combination not in items:
-        items.append(combination)
-        addeditems.append([combination, count])
-    # Processing repeated occurrence of itemset
-    else:
-        for i in range(0, len(items)):
-            if items[i] == combination:
-                addeditems[i][1] += 1
-
-# Filter frequent item(sets)
-for i in addeditems:
-    if i[1] >= minconfidence:
-        print("frequent" + '\t' + str(i))
-    else:
-        print("discarded" + '\t' + str(i[0]) + ',')
+if __name__ == "__main__":
+    main()

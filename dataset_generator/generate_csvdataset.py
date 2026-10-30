@@ -1,5 +1,6 @@
 import json
 import csv
+from pathlib import Path
 
 # Convert a JSON file to CSV file
 # This module is licensed under Public Domain.
@@ -8,12 +9,11 @@ import csv
 def generate_csvdataset():
     """ Convert a JSON dataset to CSV dataset """
 
-    with open("dataset/dataset.json", "r") as itemjson:
+    base_dir = Path(__file__).resolve().parent
+    with (base_dir / "dataset" / "dataset.json").open(encoding="utf-8") as itemjson:
         items = json.load(itemjson)
-        csvfile = open("dataset/csv_dataset.csv", "w")
-        writer = csv.writer(csvfile)
-        for i in range(0, len(items)):
-            writer.writerow(items[i])
-        csvfile.close()
+        with (base_dir / "dataset" / "csv_dataset.csv").open("w", newline="", encoding="utf-8") as csvfile:
+            csv.writer(csvfile).writerows(items)
 
-generate_csvdataset()
+if __name__ == "__main__":
+    generate_csvdataset()
